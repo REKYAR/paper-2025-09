@@ -1,0 +1,3 @@
+This repo contains the modified Hoeffding tree implementation that allows for monotonicity constraints (.py file) as well as plots from different experiments (in the directories) as well as tabular summary in the csv file. The repo contains a requrements.txt file you can use to replicate the environment, python version used is 3.10.11.
+
+The modified HoeffdingTreeClassifierMono is used like its river version, with the exception of two extra parameters, the monotonic_constrains and rho parameters. monotonic_constrains is a list of objects of MonotonicityConstraint, each taking index of the constrained feature in the dataframe (feature) and monotonicty direction which is either + or - 1. The rho parameter controls the impact of the constraints like described in the paper. 
