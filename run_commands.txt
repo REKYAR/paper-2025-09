@@ -1,0 +1,5 @@
+python .\real_data_runner_streaming_tree_mono_artificial_change_loading_cleared_2_repo.py --output_dir "D:/mgr/mgrdeg/project/masters/testing/results_experiments/hoeffding_tree_results_newdata_10000_oh" --max_correction_factor 10000
+python .\real_data_runner_streaming_tree_mono_artificial_change_loading_cleared_2_repo.py --output_dir "D:/mgr/mgrdeg/project/masters/testing/results_experiments/hoeffding_tree_results_newdata_5000_oh" --max_correction_factor 5000
+python .\real_data_runner_streaming_tree_mono_artificial_change_loading_cleared_2_repo.py --output_dir "D:/mgr/mgrdeg/project/masters/testing/results_experiments/hoeffding_tree_results_newdata_2000_oh" --max_correction_factor 2000
+python .\real_data_runner_streaming_tree_mono_artificial_change_loading_cleared_2_repo.py --output_dir "D:/mgr/mgrdeg/project/masters/testing/results_experiments/hoeffding_tree_results_newdata_1500_oh" --max_correction_factor 1500
+python .\real_data_runner_streaming_tree_mono_artificial_change_loading_cleared_2_repo.py --output_dir "D:/mgr/mgrdeg/project/masters/testing/results_experiments/hoeffding_tree_results_newdata_1000_oh" --max_correction_factor 1000

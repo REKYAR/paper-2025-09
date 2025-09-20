@@ -395,11 +395,12 @@ class DummySplitter(GaussianSplitter):
                 self._att_dist_per_class[class_idx].sigma = 0
 
 class CustomGaussianSplitter(GaussianSplitter):
-    def __init__(self, n_splits: int = 10, monotonicity_constraints: list[MonotonicityConstraint] = [], rho: float = 1e-5, stdevmul: float = 2.0):
+    def __init__(self, n_splits: int = 10, monotonicity_constraints: list[MonotonicityConstraint] = [], rho: float = 1e-5, stdevmul: float = 2.0, max_correction_factor: int = 10000):
         super().__init__(n_splits=n_splits)
         self.monotonicity_constraints = monotonicity_constraints
         self.rho = rho
         self.stdevmul = stdevmul
+        self.max_correction_factor = max_correction_factor
     
 
     
@@ -416,9 +417,7 @@ class CustomGaussianSplitter(GaussianSplitter):
             
             if correction > 0 and base_merit > 0:
 
-                max_correction_factor = 5000
-                
-                scaled_correction = min(base_merit, max_correction_factor * correction)
+                scaled_correction = min(base_merit, self.max_correction_factor * correction)
                 
                 merit = max(0, base_merit + scaled_correction)
             else:
@@ -587,6 +586,7 @@ class HoeffdingTreeClassifierMono(HoeffdingTree, base.Classifier):
         stop_mem_management: bool = False,
         remove_poor_attrs: bool = False,
         merit_preprune: bool = True,
+        max_correction_factor: int = 10000
     ):
         super().__init__(
             max_depth=max_depth,
@@ -611,9 +611,8 @@ class HoeffdingTreeClassifierMono(HoeffdingTree, base.Classifier):
         self.nominal_attributes = nominal_attributes
 
         if splitter is None:
-            print("constraints")
-            print(self.constrains)
-            self.splitter = CustomGaussianSplitter(n_splits=10, monotonicity_constraints=self.constrains, rho=self.rho, stdevmul=self.stdevmul)
+
+            self.splitter = CustomGaussianSplitter(n_splits=10, monotonicity_constraints=self.constrains, rho=self.rho, stdevmul=self.stdevmul, max_correction_factor=max_correction_factor)
         else:
             if not splitter.is_target_class:
                 raise ValueError("The chosen splitter cannot be used in classification tasks.")
@@ -999,6 +998,30 @@ class UCIDatasetLoader:
                 "positive_monotonic": [],
                 "negative_monotonic": [],
                 "notes": "Binary classification, 1=good, 0=bad"
+            },
+            "london": {
+                "target": "travel_mode",
+                "positive_monotonic": ["car_ownership", "distance", "driving_license", "pt_interchanges", ["car_ownership", "distance", "driving_license", "pt_interchanges"]],
+                "negative_monotonic": ["car_ownership", "distance", "driving_license", "pt_interchanges", ["car_ownership", "distance", "driving_license", "pt_interchanges"]],
+                "notes": "Binary classification, 1=car 0=else"
+            },
+            "students":{
+                "target": "Car",  # Final grade
+                "positive_monotonic": ["Distance","Season","CarAvail",["Distance","Season","CarAvail"]],
+                "negative_monotonic": ["Age","Grade","Gender", ["Age","Grade","Gender"]],
+                "notes": "1 car 0 something else"
+            },
+            "flights":{
+                "target": "Cancelled",
+                "positive_monotonic": ["Distance","Origin_Latitude","Month",["Distance","Airline","FlightNum"]],
+                "negative_monotonic": ["Distance","Origin_Latitude",["DayOfWeek","Month","Year"]],
+                "notes": "Binary classification, 1=cancelled, 0=not cancelled"
+            },
+            "ohio":{
+                "target": "label",
+                "positive_monotonic": ["drivers","workers","guest",[]],
+                "negative_monotonic": ["income","students",[]],
+                "notes": "Binary classification, 1=sole driver, 0=not a sole driver"
             }
         }
     
@@ -1134,6 +1157,14 @@ class UCIDatasetLoader:
             return self._load_auto_mpg(), constraints
         elif "ionosphere" in dataset_name:
             return self._load_ionosphere(), constraints
+        elif "london" in dataset_name:
+            return self._load_london(), constraints
+        elif "students" in dataset_name:
+            return self._load_students(), constraints
+        elif "flights" in dataset_name:
+            return self._load_flights(), constraints
+        elif "ohio" in dataset_name:
+            return self._load_ohio(), constraints
         else:
             print(f"Loading generic dataset: {dataset_name}")
             try:
@@ -1360,6 +1391,29 @@ class UCIDatasetLoader:
         df['class'] = df['class'].map({'g': 1, 'b': 0})
         
         print(df.head())
+        
+        return df
+    
+    def _load_london(self) -> pd.DataFrame:
+        """Load London dataset."""
+        self._extract_zip_if_needed("london")
+        
+        dataset_path = os.path.join(self.data_dir, "london")
+        data_file = os.path.join(dataset_path, "london_data_extended_by_mg.csv")
+        
+        if not os.path.exists(data_file):
+            data_files = glob.glob(os.path.join(dataset_path, "*.csv"))
+            if data_files:
+                data_file = data_files[0]
+            else:
+                raise FileNotFoundError(f"Cannot find data file for london")
+        
+        df = pd.read_csv(data_file)
+
+
+
+
+        df['travel_mode'] = df['travel_mode'].apply(lambda x: 1 if x == 4 else 0)
         
         return df
     
@@ -1672,6 +1726,89 @@ class UCIDatasetLoader:
         
         if 'car name' in df.columns:
             df = df.drop('car name', axis=1)
+        
+        return df
+    
+    def _load_students(self) -> pd.DataFrame:
+        """Load Students dataset."""
+        self._extract_zip_if_needed("students")
+        
+        dataset_path = os.path.join(self.data_dir, "students")
+        data_file = os.path.join(dataset_path, "students_binarized.csv")
+        
+        if not os.path.exists(data_file):
+            data_files = glob.glob(os.path.join(dataset_path, "*.csv"))
+            if data_files:
+                data_file = data_files[0]
+            else:
+                raise FileNotFoundError(f"Cannot find data file for students")
+        
+        df = pd.read_csv(data_file, sep=',')
+        if 'ID' in df.columns:
+            df = df.drop('ID', axis=1)
+        
+        df = df.dropna()
+        
+        return df
+    
+        
+    def _load_ohio(self) -> pd.DataFrame:
+        """Load Students dataset."""
+        self._extract_zip_if_needed("ohio")
+        
+        dataset_path = os.path.join(self.data_dir, "ohio")
+        data_file = os.path.join(dataset_path, "AllOhioDataSorted_cleaned.csv")
+        
+        if not os.path.exists(data_file):
+            data_files = glob.glob(os.path.join(dataset_path, "*.csv"))
+            if data_files:
+                data_file = data_files[0]
+            else:
+                raise FileNotFoundError(f"Cannot find data file for students")
+            
+
+        
+        df = pd.read_csv(data_file, sep=',')
+        if 'ID' in df.columns:
+            df = df.drop('ID', axis=1)
+        
+        df = df.dropna()
+
+        if 'ML_region' in df.columns:
+            df = df.drop('ML_region', axis=1)
+        
+        return df
+
+
+    
+    def _load_flights(self) -> pd.DataFrame:
+        self._extract_zip_if_needed("flights")
+        dataset_path = os.path.join(self.data_dir, "flights")
+        data_file = os.path.join(dataset_path, "flights_small.csv")
+        
+        if not os.path.exists(data_file):
+            data_files = glob.glob(os.path.join(dataset_path, "*.csv"))
+            if data_files:
+                data_file = data_files[0]
+            else:
+                raise FileNotFoundError(f"Cannot find data file for students")
+        
+        df = pd.read_csv(data_file, sep=',')
+        print(f"Loaded flights data from {data_file}")
+
+        df['Cancelled'] = df['Cancelled'].apply(lambda x: 1 if x else 0)
+        if 'FlightDate' in df.columns:
+            df = df.drop('FlightDate', axis=1)
+        if 'Diverted' in df.columns:
+            df = df.drop('Diverted', axis=1)
+
+        categorical_cols = ['Airline', 'Origin', 'Dest', 'Marketing_Airline_Network', 
+                           'Operated_or_Branded_Code_Share_Partners', 'IATA_Code_Marketing_Airline', 'Operating_Airline', 'IATA_Code_Operating_Airline',
+                           'OriginCityName', 'OriginState', 'OriginStateName', 'DestCityName',
+                           'DestState', 'DestStateName', 'DepTimeBlk', 'ArrTimeBlk',]
+        
+        for col in categorical_cols:
+            df[col] = df[col].astype('category').cat.codes
         
         return df
     
@@ -2013,6 +2150,7 @@ def run_single_experiment(dataset_name, df, constraints, experiment_name, **kwar
     stdevmul = kwargs.get('stdevmul', 2.0)
     grace_period = kwargs.get('grace_period', 200)
     max_depth = kwargs.get('max_depth', None)
+    max_correction_factor = kwargs.get('max_correction_factor', 1.0)
     
     ht_with_constraints = HoeffdingTreeClassifierMono(
         monotonic_constrains=monotonicity_constraints,
@@ -2021,7 +2159,8 @@ def run_single_experiment(dataset_name, df, constraints, experiment_name, **kwar
         grace_period=grace_period,
         max_depth=max_depth,
         leaf_prediction="mc",
-        split_criterion="info_gain"
+        split_criterion="info_gain",
+        max_correction_factor=max_correction_factor
     )
     
     ht_without_constraints = HoeffdingTreeClassifierMono(
@@ -2030,7 +2169,8 @@ def run_single_experiment(dataset_name, df, constraints, experiment_name, **kwar
         grace_period=grace_period,
         max_depth=max_depth,
         leaf_prediction="mc",
-        split_criterion="info_gain"
+        split_criterion="info_gain",
+        max_correction_factor=max_correction_factor
     )
     
     metrics_dict = {
@@ -2203,7 +2343,7 @@ def run_multiple_experiments(dataset_name, df, constraints, **kwargs):
         print(f"\nRunning experiment on dataset '{dataset_name}' with: {config['experiment_name']}")
         
         config_kwargs = kwargs.copy()
-        for key in ['rho', 'stdevmul', 'grace_period', 'max_depth']:
+        for key in ['rho', 'stdevmul', 'grace_period', 'max_depth', 'max_correction_factor']:
             if key in config:
                 config_kwargs[key] = config[key]
         
@@ -2604,7 +2744,8 @@ def run_all_experiments(data_dir,
                        grace_period=200,
                        max_depth=None,
                        normalize=True,
-                       output_dir="hoeffding_tree_results"):
+                       output_dir="hoeffding_tree_results",
+                       max_correction_factor=10000):
     """
     Run experiments on multiple UCI datasets using HoeffdingTreeClassifierMono.
     
@@ -2655,7 +2796,8 @@ def run_all_experiments(data_dir,
             grace_period=grace_period,
             max_depth=max_depth,
             normalize=normalize,
-            output_dir=output_dir
+            output_dir=output_dir,
+            max_correction_factor=max_correction_factor
         )
         
         if results:
@@ -2690,6 +2832,8 @@ def main():
                        help='Disable feature normalization')
     parser.add_argument('--output_dir', type=str, default='hoeffding_tree_results',
                        help='Directory to save results')
+    parser.add_argument('--max_correction_factor', type=float, default=10000,
+                       help='Maximum correction factor for Hoeffding Tree')
     
     args = parser.parse_args()
     
@@ -2703,7 +2847,8 @@ def main():
         grace_period=args.grace_period,
         max_depth=args.max_depth,
         normalize=not args.no_normalization,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        max_correction_factor=args.max_correction_factor
     )
 
 if __name__ == "__main__":
